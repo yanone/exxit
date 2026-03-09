@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reddit Bulk Cleaner</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Reddit Bulk Cleaner</h1>
+      <p class="hint">No options. Open an old.reddit user page and click Start.</p>
+
+      <div class="buttons">
+        <button id="start">Start</button>
+        <button id="stop" class="secondary">Stop</button>
+        <button id="refresh" class="secondary">Refresh Status</button>
+      </div>
+
+      <section class="status">
+        <p id="summary">Idle</p>
+        <pre id="log"></pre>
+      </section>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
