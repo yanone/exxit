@@ -2,16 +2,23 @@
 
 Exxit is a source-loaded Chrome extension for deleting your own Reddit posts/comments from old.reddit profile pages.
 
+## Disclaimer
+
+This code is provided as-is, with no warranty of any kind and no support.
+If you use it, you are responsible for reviewing it, forking it, and adapting it to your own needs.
+
 ## Install Exxit from source (Developer mode)
 
 1. Open Chrome.
-2. Go to `chrome:packed\*\*.
-3. Select this folder: `exxit-extension`
-4. Verify the extension appears as **Exxit**.
+2. Go to `chrome://extensions/` or load extensions page from menus
+3. Enable `Developer Mode`
+4. Click `Load unpacked extension`
+5. Select this folder: `exxit-extension`
+6. Verify the extension appears as **Exxit**.
 
 ## Run Exxit
 
-1. In the same Chrome profile, sign in to Reddit.
+1. In the same Chrome profile, sign in to normal Reddit.
 2. Open this pages: `https://old.reddit.com/user/<your_user>/`
 3. Click the Exxit extension icon.
 4. Click **Start** to begin deletion.
