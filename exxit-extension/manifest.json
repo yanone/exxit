@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Reddit Bulk Cleaner",
-  "description": "Delete your Reddit posts and comments one-by-one from old.reddit profile pages.",
-  "version": "0.1.0",
+  "name": "Exxit",
+  "description": "Delete your Reddit posts and comments from old.reddit profile pages.",
+  "version": "0.2.0",
   "permissions": ["activeTab", "storage", "tabs", "scripting"],
   "host_permissions": ["*://*.reddit.com/*"],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Reddit Bulk Cleaner"
+    "default_title": "Exxit"
   },
   "content_scripts": [
     {

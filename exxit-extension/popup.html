@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Exxit</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Exxit</h1>
+      <p class="hint">
+        No options. Open an old.reddit user page and click Start.
+      </p>
+
+      <div class="buttons">
+        <button id="start">Start</button>
+        <button id="stop" class="danger">Stop</button>
+      </div>
+
+      <section class="status">
+        <p id="summary">Status</p>
+        <section class="metricsPanel" aria-label="Run status metrics">
+          <article class="metricCard">
+            <p class="metricLabel">Running</p>
+            <p id="metricRunning" class="metricValue">No</p>
+          </article>
+          <article class="metricCard">
+            <p class="metricLabel">Deleted</p>
+            <p id="metricDeleted" class="metricValue">0</p>
+          </article>
+          <article class="metricCard">
+            <p class="metricLabel">Skipped</p>
+            <p id="metricSkipped" class="metricValue">0</p>
+          </article>
+          <article class="metricCard">
+            <p class="metricLabel">Failed</p>
+            <p id="metricFailed" class="metricValue">0</p>
+          </article>
+        </section>
+        <section id="errorPanel" hidden>
+          <p class="errorTitle">Errors</p>
+          <pre id="log"></pre>
+        </section>
+      </section>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

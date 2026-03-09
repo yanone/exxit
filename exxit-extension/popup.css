@@ -1,0 +1,133 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  width: 460px;
+  overflow: hidden;
+}
+
+main {
+  padding: 12px;
+}
+
+h1 {
+  font-size: 16px;
+  margin: 0 0 6px;
+}
+
+.hint {
+  margin: 0 0 12px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+button {
+  border: 0;
+  border-radius: 6px;
+  padding: 8px;
+  background: #16a34a;
+  color: white;
+  cursor: pointer;
+  font-size: 12px;
+  transition:
+    background-color 120ms ease,
+    opacity 120ms ease;
+}
+
+button.secondary {
+  background: #334155;
+}
+
+button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+#start.running {
+  background: #64748b;
+}
+
+#stop {
+  background: #334155;
+}
+
+#stop.running {
+  background: #dc2626;
+}
+
+.status {
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 8px;
+  background: #111827;
+  min-height: 220px;
+}
+
+#summary {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #93c5fd;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.metricsPanel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.metricCard {
+  border: 1px solid #2b3b55;
+  border-radius: 8px;
+  padding: 6px;
+  background: linear-gradient(160deg, #162338, #1b2b43 55%, #111827);
+}
+
+.metricLabel {
+  margin: 0;
+  color: #9fb0c8;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.metricValue {
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+#metricRunning.isRunning {
+  color: #22c55e;
+}
+
+#errorPanel[hidden] {
+  display: none;
+}
+
+.errorTitle {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: #fca5a5;
+}
+
+#log {
+  margin: 0;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  color: #cbd5e1;
+}

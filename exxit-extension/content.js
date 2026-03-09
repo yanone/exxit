@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'redditBulkCleanerStateV1';
+const STORAGE_KEY = "exxitStateV1";
 
 const state = {
   running: false,
@@ -16,14 +16,18 @@ const state = {
     delayMs: 1200,
     maxPages: 500,
     followNext: true,
+    refreshEveryDeletions: 20,
   },
   diagnostics: {
     startedAt: null,
     finishedAt: null,
-    locationHref: '',
+    locationHref: "",
     usernameInPath: null,
-    modeDetected: 'unknown',
+    modeDetected: "unknown",
     maxPages: 500,
+    remainingComments: 0,
+    remainingPosts: 0,
+    deletesSinceRefresh: 0,
     lastError: null,
     lastNextUrl: null,
     lastUpdated: null,
@@ -58,7 +62,7 @@ function restoreState() {
       return;
     }
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') {
+    if (!parsed || typeof parsed !== "object") {
       return;
     }
     state.running = Boolean(parsed.running);
@@ -119,27 +123,30 @@ function sleep(ms) {
 function detectMode() {
   const path = window.location.pathname;
   if (/\/user\/[^/]+\/comments\/?$/i.test(path)) {
-    return 'comments';
+    return "comments";
   }
   if (/\/user\/[^/]+\/submitted\/?$/i.test(path)) {
-    return 'submitted';
+    return "submitted";
   }
-  if (/\/user\/[^/]+\/?$/i.test(path) || /\/user\/[^/]+\/overview\/?$/i.test(path)) {
-    return 'overview';
+  if (
+    /\/user\/[^/]+\/?$/i.test(path) ||
+    /\/user\/[^/]+\/overview\/?$/i.test(path)
+  ) {
+    return "overview";
   }
-  return 'unknown';
+  return "unknown";
 }
 
 function ensureOldRedditPathMode() {
-  if (!window.location.hostname.startsWith('old.reddit.com')) {
-    state.diagnostics.lastError = 'Not on old.reddit.com';
+  if (!window.location.hostname.startsWith("old.reddit.com")) {
+    state.diagnostics.lastError = "Not on old.reddit.com";
     persistState();
     return false;
   }
   const mode = detectMode();
   state.diagnostics.modeDetected = mode;
-  if (mode === 'unknown') {
-    state.diagnostics.lastError = 'Not on supported old.reddit user path';
+  if (mode === "unknown") {
+    state.diagnostics.lastError = "Not on supported old.reddit user path";
     persistState();
     return false;
   }
@@ -154,30 +161,89 @@ function currentUsername() {
 }
 
 function currentModhash() {
-  const modhash = window?.r?.config?.modhash;
-  return typeof modhash === 'string' && modhash.length > 0 ? modhash : null;
+  // Content scripts run in an isolated JS world, so page globals like window.r
+  // may be unavailable. Prefer DOM sources that are always present when logged in.
+  const fromInput =
+    document.querySelector('form.logout input[name="uh"]')?.value ||
+    document.querySelector('#header-bottom-right input[name="uh"]')?.value ||
+    document.querySelector('input[name="uh"]')?.value ||
+    null;
+  if (typeof fromInput === "string" && fromInput.length > 0) {
+    return fromInput;
+  }
+
+  // Fallback for pages where modhash only appears in inline setup script.
+  for (const script of Array.from(document.scripts)) {
+    const text = script.textContent || "";
+    const m = text.match(/"modhash"\s*:\s*"([^"]+)"/);
+    if (m?.[1]) {
+      return m[1];
+    }
+  }
+
+  return null;
 }
 
 function candidateThings(mode) {
-  const all = Array.from(document.querySelectorAll('#siteTable > div.thing'));
-  if (mode === 'comments') {
-    return all.filter((el) => el.classList.contains('comment'));
+  const all = Array.from(document.querySelectorAll("#siteTable > div.thing"));
+  if (mode === "comments") {
+    return all.filter((el) => el.classList.contains("comment"));
   }
-  if (mode === 'submitted') {
-    return all.filter((el) => el.classList.contains('link'));
+  if (mode === "submitted") {
+    return all.filter((el) => el.classList.contains("link"));
   }
   return all.filter(
-    (el) => el.classList.contains('comment') || el.classList.contains('link')
+    (el) => el.classList.contains("comment") || el.classList.contains("link"),
   );
 }
 
+function countRemaining(things) {
+  const me = currentUsername();
+  if (!me) {
+    return { comments: 0, posts: 0 };
+  }
+
+  let comments = 0;
+  let posts = 0;
+  for (const thing of things) {
+    if (thingAuthor(thing) !== me) {
+      continue;
+    }
+    if (isResolved(thing)) {
+      continue;
+    }
+    const { mainDelete } = deleteControls(thing);
+    if (!mainDelete) {
+      continue;
+    }
+
+    if (thing.classList.contains("comment")) {
+      comments += 1;
+      continue;
+    }
+    if (thing.classList.contains("link")) {
+      posts += 1;
+    }
+  }
+  return { comments, posts };
+}
+
+function updateRemainingFromDom(mode) {
+  const things = candidateThings(mode);
+  const remaining = countRemaining(things);
+  state.diagnostics.remainingComments = remaining.comments;
+  state.diagnostics.remainingPosts = remaining.posts;
+  persistState();
+  return remaining;
+}
+
 function thingAuthor(thing) {
-  const topAuthor = thing.querySelector(':scope > .entry .tagline a.author');
+  const topAuthor = thing.querySelector(":scope > .entry .tagline a.author");
   if (topAuthor?.textContent) {
     return topAuthor.textContent.toLowerCase();
   }
-  const fallback = thing.querySelector('.entry .tagline a.author');
-  return (fallback?.textContent || '').toLowerCase();
+  const fallback = thing.querySelector(".entry .tagline a.author");
+  return (fallback?.textContent || "").toLowerCase();
 }
 
 function actionableCount(things) {
@@ -203,64 +269,52 @@ function actionableCount(things) {
 }
 
 function emptyPageReloadKey() {
-  return `redditBulkCleanerReloadedEmpty:${state.runId || 'none'}:${window.location.pathname}${window.location.search}`;
+  return `exxitReloadedEmpty:${state.runId || "none"}:${window.location.pathname}${window.location.search}`;
 }
 
 function deleteControls(thing) {
-  const mainDelete = thing.querySelector(':scope > .entry form.del-button .option.main a');
-  const confirmYes = thing.querySelector(':scope > .entry form.del-button .option.error a.yes');
-  const form = thing.querySelector(':scope > .entry form.del-button');
+  const mainDelete = thing.querySelector(
+    ":scope > .entry form.del-button .option.main a",
+  );
+  const confirmYes = thing.querySelector(
+    ":scope > .entry form.del-button .option.error a.yes",
+  );
+  const form = thing.querySelector(":scope > .entry form.del-button");
   const idInput = form?.querySelector('input[name="id"]');
   const uhInput = form?.querySelector('input[name="uh"]');
   return {
     mainDelete,
     confirmYes,
     form,
-    thingIdFromForm: idInput?.getAttribute('value') || null,
-    uh: uhInput?.getAttribute('value') || null,
+    thingIdFromForm: idInput?.getAttribute("value") || null,
+    uh: uhInput?.getAttribute("value") || null,
   };
 }
 
 function isResolved(thing) {
-  if (thing.classList.contains('deleted') || thing.classList.contains('spam')) {
+  if (thing.classList.contains("deleted") || thing.classList.contains("spam")) {
     return true;
   }
-  const ownEntry = thing.querySelector(':scope > .entry') || thing.querySelector('.entry');
-  const bodyText = (ownEntry?.textContent || '').toLowerCase();
-  if (bodyText.includes('[deleted]')) {
+  const ownEntry =
+    thing.querySelector(":scope > .entry") || thing.querySelector(".entry");
+  const bodyText = (ownEntry?.textContent || "").toLowerCase();
+  if (bodyText.includes("[deleted]")) {
     return true;
   }
   return false;
 }
 
-async function waitForResolved(thing, timeoutMs) {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    if (isResolved(thing)) {
-      return true;
-    }
-    const stillHasDelete = thing.querySelector(
-      ':scope > .entry form.del-button .option.main a'
-    );
-    if (!stillHasDelete) {
-      return true;
-    }
-    await sleep(250);
-  }
-  return isResolved(thing);
-}
-
 async function deleteViaApi(thingId, uh) {
   const payload = new URLSearchParams();
-  payload.set('id', thingId);
-  payload.set('uh', uh);
-  payload.set('api_type', 'json');
+  payload.set("id", thingId);
+  payload.set("uh", uh);
+  payload.set("api_type", "json");
 
-  const res = await fetch('/api/del', {
-    method: 'POST',
-    credentials: 'include',
+  const res = await fetch("/api/del", {
+    method: "POST",
+    credentials: "include",
     headers: {
-      'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
     },
     body: payload.toString(),
   });
@@ -288,12 +342,12 @@ async function processThing(thing) {
   if (!author || !me || author !== me) {
     state.stats.skipped += 1;
     log(
-      `[SKIP] not-own-item id=${thing.getAttribute('data-fullname') || thing.id || 'unknown'} author=${author || 'none'} expected=${me || 'none'}`
+      `[SKIP] not-own-item id=${thing.getAttribute("data-fullname") || thing.id || "unknown"} author=${author || "none"} expected=${me || "none"}`,
     );
     return;
   }
 
-  const id = thing.getAttribute('data-fullname') || thing.id || 'unknown';
+  const id = thing.getAttribute("data-fullname") || thing.id || "unknown";
 
   if (isResolved(thing)) {
     state.stats.skipped += 1;
@@ -301,7 +355,7 @@ async function processThing(thing) {
     return;
   }
 
-  const { mainDelete, confirmYes, thingIdFromForm, uh } = deleteControls(thing);
+  const { mainDelete, thingIdFromForm, uh } = deleteControls(thing);
   if (!mainDelete) {
     state.stats.skipped += 1;
     log(`[SKIP] no-delete-control ${id}`);
@@ -317,7 +371,7 @@ async function processThing(thing) {
     if (apiThingId && apiUh) {
       const apiResult = await deleteViaApi(apiThingId, apiUh);
       log(
-        `[API] del id=${apiThingId} status=${apiResult.status} errors=${JSON.stringify(apiResult.apiErrors)}`
+        `[API] del id=${apiThingId} status=${apiResult.status} errors=${JSON.stringify(apiResult.apiErrors)}`,
       );
       if (!apiResult.ok) {
         log(`[API] non-ok response body=${apiResult.bodyText}`);
@@ -327,28 +381,28 @@ async function processThing(thing) {
       log(`[WARN] api delete unavailable for ${id} (missing id/modhash)`);
     }
 
-    if (!deletedByApi) {
-      mainDelete.click();
-      await sleep(500);
-
-      const yesNow = thing.querySelector(
-        ':scope > .entry form.del-button .option.error a.yes'
-      ) || confirmYes;
-      if (yesNow) {
-        yesNow.click();
-        await sleep(1200);
-      } else {
-        log(`[WARN] confirm button missing for ${id}`);
-      }
-    }
-
-    const resolved = await waitForResolved(thing, 8000);
-    if (resolved) {
+    if (deletedByApi) {
+      // old.reddit often doesn't update the current DOM after /api/del, but
+      // changes are reflected after reload/navigation. Accept API success.
       state.stats.deleted += 1;
-      log(`[OK] deleted ${id}`);
+      state.diagnostics.deletesSinceRefresh += 1;
+      log(`[OK] deleted ${id} (api-accepted)`);
+
+      const mode = state.diagnostics.modeDetected;
+      updateRemainingFromDom(mode);
+
+      if (
+        state.diagnostics.deletesSinceRefresh >=
+        state.config.refreshEveryDeletions
+      ) {
+        state.diagnostics.deletesSinceRefresh = 0;
+        log("Refresh threshold reached; reloading page.");
+        persistState();
+        return { triggerReload: true };
+      }
     } else {
       state.stats.failed += 1;
-      log(`[FAIL] unresolved after delete ${id}`);
+      log(`[FAIL] api-delete-not-accepted ${id}`);
     }
   } catch (err) {
     state.stats.failed += 1;
@@ -357,14 +411,15 @@ async function processThing(thing) {
   }
 
   await sleep(state.config.delayMs);
+  return { triggerReload: false };
 }
 
 function nextPageUrl() {
-  const nextLink = document.querySelector('span.next-button a');
+  const nextLink = document.querySelector("span.next-button a");
   if (!nextLink) {
     return null;
   }
-  const href = nextLink.getAttribute('href');
+  const href = nextLink.getAttribute("href");
   if (!href) {
     return null;
   }
@@ -375,8 +430,8 @@ async function runCurrentPage() {
   state.diagnostics.locationHref = window.location.href;
   state.diagnostics.usernameInPath = currentUsername();
   if (!ensureOldRedditPathMode()) {
-    log('Open a supported old.reddit.com user page first.');
-    finishRun('unsupported page');
+    log("Open a supported old.reddit.com user page first.");
+    finishRun("unsupported page");
     return;
   }
 
@@ -387,42 +442,52 @@ async function runCurrentPage() {
   const mode = state.diagnostics.modeDetected;
   const things = candidateThings(mode);
   log(`Mode=${mode} found ${things.length} candidate items`);
+  const remainingNow = updateRemainingFromDom(mode);
+  log(
+    `Remaining now comments=${remainingNow.comments} posts=${remainingNow.posts}`,
+  );
   const beforeActionable = actionableCount(things);
   log(`Actionable on page=${beforeActionable}`);
 
   if (beforeActionable === 0) {
     const key = emptyPageReloadKey();
     if (!sessionStorage.getItem(key)) {
-      sessionStorage.setItem(key, '1');
-      log('No actionable items found; reloading page once to confirm empty state.');
+      sessionStorage.setItem(key, "1");
+      log(
+        "No actionable items found; reloading page once to confirm empty state.",
+      );
       window.location.reload();
       return;
     }
-    log('No actionable items after reload; continuing to next page.');
+    log("No actionable items after reload; continuing to next page.");
   }
 
   for (const thing of things) {
     if (state.stopRequested) {
-      log('Stop requested. Halting current page.');
-      finishRun('stopped by user');
+      log("Stop requested. Halting current page.");
+      finishRun("stopped by user");
       return;
     }
-    await processThing(thing);
+    const result = await processThing(thing);
+    if (result?.triggerReload) {
+      window.location.reload();
+      return;
+    }
   }
 
   if (state.stopRequested) {
-    finishRun('stopped by user');
+    finishRun("stopped by user");
     return;
   }
 
   if (!state.config.followNext || state.pageNumber >= state.config.maxPages) {
-    finishRun('page limit reached or follow-next disabled');
+    finishRun("page limit reached or follow-next disabled");
     return;
   }
 
   const next = nextPageUrl();
   if (!next) {
-    finishRun('no next page found');
+    finishRun("no next page found");
     return;
   }
 
@@ -433,15 +498,15 @@ async function runCurrentPage() {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!message || typeof message !== 'object') {
+  if (!message || typeof message !== "object") {
     sendResponse(snapshot());
     return;
   }
 
-  if (message.type === 'START') {
+  if (message.type === "START") {
     restoreState();
     if (state.running) {
-      log('Start ignored: run already in progress.');
+      log("Start ignored: run already in progress.");
       sendResponse(snapshot());
       return;
     }
@@ -458,6 +523,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       usernameInPath: currentUsername(),
       modeDetected: detectMode(),
       maxPages: state.config.maxPages,
+      remainingComments: 0,
+      remainingPosts: 0,
+      deletesSinceRefresh: 0,
       lastError: null,
       lastNextUrl: null,
       lastUpdated: new Date().toISOString(),
@@ -468,10 +536,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       skipped: 0,
       failed: 0,
     };
-    log(`Start delay=${state.config.delayMs}ms maxPages=${state.config.maxPages}`);
+    log(
+      `Start delay=${state.config.delayMs}ms maxPages=${state.config.maxPages}`,
+    );
     log(`Run ID=${state.runId}`);
     log(`URL=${window.location.href}`);
-    log(`User in path=${state.diagnostics.usernameInPath || 'none'}`);
+    log(`User in path=${state.diagnostics.usernameInPath || "none"}`);
     log(`Detected mode=${state.diagnostics.modeDetected}`);
     persistState();
     void runCurrentPage();
@@ -479,15 +549,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return;
   }
 
-  if (message.type === 'STOP') {
+  if (message.type === "STOP") {
     state.stopRequested = true;
-    log('Stop requested from popup.');
+    log("Stop requested from popup.");
     persistState();
     sendResponse(snapshot());
     return;
   }
 
-  if (message.type === 'STATUS') {
+  if (message.type === "STATUS") {
     sendResponse(snapshot());
     return;
   }
@@ -499,7 +569,7 @@ restoreState();
 
 (function maybeAutoResume() {
   if (state.running && !state.stopRequested) {
-    log('Resuming persisted run on this page.');
+    log("Resuming persisted run on this page.");
     void runCurrentPage();
   }
 })();
