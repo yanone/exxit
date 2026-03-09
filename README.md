@@ -28,7 +28,7 @@ If you use it, you are responsible for reviewing it, forking it, and adapting it
 
 - Uses authenticated API requests from your active old.reddit session.
 - UI may not immediately redraw each deleted item on the same page load.
-- Auto-refreshes the page every 25 successful deletions.
+- Auto-refreshes the page every 20 successful deletions.
 - Status shows Running, Deleted, Skipped, and Failed.
 - Error log panel appears only when failures/errors are detected.
 
